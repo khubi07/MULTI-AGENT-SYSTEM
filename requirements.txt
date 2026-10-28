@@ -1,0 +1,31 @@
+# LangChain agents and LCEL (RunnableSequence, prompt | model | parser)
+langchain==1.4.7
+langchain-core>=1.6,<2.0
+langgraph>=1.0,<2.0
+langchain-community>=0.2.0
+
+# Gemini chat model and Tavily web search tool for LangChain agents
+langchain-google-genai==4.4.2
+langchain-tavily==0.2.18
+
+# Web-page fetching and HTML parsing
+requests>=2.32,<3.0
+httpx>=0.28,<1.0
+beautifulsoup4==4.15.0
+lxml>=6.0,<7.0
+
+# Structured validation, retry handling, and local API-key configuration
+pydantic>=2.14,<3.0
+tenacity>=9.0,<10.0
+python-dotenv>=1.0,<2.0
+
+# Optional project-support packages: tracing/debugging and tabular research data
+langsmith>=0.14,<1.0
+pandas>=3.1,<4.0
+rich>=13.7.0
+
+# token counting/ text utils
+tiktoken>=0.6.0
+
+#Asynchronous support for LangChain agents
+aiohttp>=3.9.0
