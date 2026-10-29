@@ -1,6 +1,7 @@
 from agents import build_search_agent, build_reader_agent, writer_chain, critic_chain
 from langchain_core.messages import HumanMessage
 from langchain_core.callbacks import BaseCallbackHandler
+from rich.console import Console 
 import logging
 import time
 
@@ -32,72 +33,89 @@ class PipelineDebugHandler(BaseCallbackHandler):
     def on_tool_error(self, error, **kwargs):
         logger.error("Tool failed: %s", error)
 
+console = Console()
 
-#creating base function
-def run_reasearch_pipeline(topic: str) -> dict:
-    state = {} #shared memory
 
-    logger.info("Step 1/4: search agent started")
+def run_step(step_name, operation, *args, **kwargs):
+    logger.info("%s started", step_name)
     started_at = time.perf_counter()
 
     try:
-        search_agent = build_search_agent()
-        search_result = search_agent.invoke({
-            "messages": [
-                HumanMessage(
-                    content=f"Find recent, reliable and detailed information about: {topic}"
-                )
-            ]},
-        config={"callbacks": [PipelineDebugHandler()]},
-    )
-
+        with console.status(f"[cyan]{step_name} is running...[/cyan]"):
+            result = operation(*args, **kwargs)
     except Exception:
-        logger.exception("Step 1/4: search agent failed")
+        elapsed = time.perf_counter() - started_at
+        logger.exception("%s failed after %.2f seconds", step_name, elapsed)
         raise
 
-    logger.info(
-        "Step 1/4: search agent completed in %.2f seconds",
-        time.perf_counter() - started_at,
+    elapsed = time.perf_counter() - started_at
+    logger.info("%s completed in %.2f seconds", step_name, elapsed)
+    return result
+
+#creating base function
+def run_reasearch_pipeline(topic: str) -> dict:
+    state = {}
+    callbacks = [PipelineDebugHandler()]
+
+    # Step 1: search
+    search_agent = build_search_agent()
+    search_result = run_step(
+        "Step 1/4: Search agent",
+        search_agent.invoke,
+        {
+            "messages": [
+                HumanMessage(
+                    content=(
+                        "Find recent, reliable and detailed information about: "
+                        f"{topic}"
+                    )
+                )
+            ]
+        },
+        config={"callbacks": callbacks},
     )
 
     state["search_result"] = search_result["messages"][-1].content
     logger.info(
-        "Step 1/4: saved search result (%d characters)",
+        "Saved search result (%d characters)",
         len(state["search_result"]),
     )
+
     #when search_agent is invoked, internal loop run and return a list of msg
     #from that list the content of AI msg is our use, so only store that in search_res key
 
     #created a key called search_result inside empty state dict
-    state["search_result"] = search_result['messages'][-1].content
-
-    print("\n search reuslt ",state['search_result'])
+ 
 
     #now lets connect research agent to reader agent when deeply reads the link and fine tune our content
     # remember we never connected them earlier anywhere (tools or agent)
     # pipeline is used to conect everythin, earlier everything was independent
 
     # Use the search results to find and scrape the most relevant source.
+    # Step 2: read a source from the search results
     reader_agent = build_reader_agent()
-    reader_result = reader_agent.invoke({
-        "messages": [HumanMessage(
-            content=(
-                f"Based on the following search results about '{topic}', "
-                "pick the most relevant URL and scrape it for deeper content.\n\n"
-                f"Search Results:\n{state['search_result'][:800]}"
-            )
-        )]
-    })
-    state["reader_result"] = reader_result['messages'][-1].content
+    reader_result = run_step(
+        "Step 2/4: Reader agent",
+        reader_agent.invoke,
+        {
+            "messages": [
+                HumanMessage(
+                    content=(
+                        f"Based on the following search results about '{topic}', "
+                        "pick the most relevant URL and scrape it for deeper content.\n\n"
+                        f"Search Results:\n{state['search_result'][:800]}"
+                    )
+                )
+            ]
+        },
+        config={"callbacks": callbacks},
+    )
 
+    state["reader_result"] = reader_result["messages"][-1].content
 
     #why choosing last 800 words? because all the links might be present there only
     
     #step 3 - writer chain 
-
-    print("\n"+" ="*50)
-    print("step 3 - Writer is drafting the report ...")
-    print("="*50)
 
     #lets combine research and detailed scrapped research and send it to writer chain to 
     # get report
@@ -108,25 +126,27 @@ def run_reasearch_pipeline(topic: str) -> dict:
 
     #writer chain needs 2 val, so use dict{}
     #store in state dict
-    state["report"] = writer_chain.invoke({
-        "topic": topic, #this came as arg from run_research_pipeline
-        "research": research_combined
-    })
-    print("\n Final Report\n",state['report'])
+    state["report"] = run_step(
+        "Step 3/4: Writer",
+        writer_chain.invoke,
+        {
+            "topic": topic,
+            "research": research_combined,
+        },
+        config={"callbacks": callbacks},
+    )
+    # Step 4: critique the report
+    state["feedback"] = run_step(
+        "Step 4/4: Critic",
+        critic_chain.invoke,
+        {"report": state["report"]},
+        config={"callbacks": callbacks},
+    )
 
-    #critic chain
-    print("\n"+" ="*50)
-    print("step 4 - critic is reviewing the report ")
-    print("="*50)
+    print("\nFinal report\n")
+    print(state["report"])
 
-    state["feedback"] = critic_chain.invoke({
-        "report": state["report"]
-    })
-
-    print("\n critic report \n", state['feedback'])
+    print("\nCritic feedback\n")
+    print(state["feedback"])
 
     return state
-       
-if __name__ == "__main__":
-    topic = input("\n Enter a research topic: ")
-    run_reasearch_pipeline(topic)
