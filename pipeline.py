@@ -40,7 +40,43 @@ def run_reasearch_pipeline(topic: str) -> dict:
     })
     state["reader_result"] = reader_result['messages'][-1].content
 
-    return state
 
     #why choosing last 800 words? because all the links might be present there only
     
+    #step 3 - writer chain 
+
+    print("\n"+" ="*50)
+    print("step 3 - Writer is drafting the report ...")
+    print("="*50)
+
+    #lets combine research and detailed scrapped research and send it to writer chain to 
+    # get report
+    research_combined = (
+        f"SEARCH RESULTS : \n {state['search_results']} \n\n"
+        f"DETAILED SCRAPED CONTENT : \n {state['scraped_content']}"
+    )
+
+    #writer chain needs 2 val, so use dict{}
+    #store in state dict
+    state["report"] = writer_chain.invoke({
+        "topic": topic, #this came as arg from run_research_pipeline
+        "research": research_combined
+    })
+    print("\n Final Report\n",state['report'])
+
+    #critic chain
+    print("\n"+" ="*50)
+    print("step 4 - critic is reviewing the report ")
+    print("="*50)
+
+    state["feedback"] = critic_chain.invoke({
+        "report": state["report"]
+    })
+
+    print("\n critic report \n", state['feedback'])
+
+    return state
+       
+if __name__ == "__main__":
+    topic = input("\n Enter a research topic: ")
+    run_reasearch_pipeline(topic)
