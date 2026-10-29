@@ -29,3 +29,5 @@ tiktoken>=0.6.0
 
 #Asynchronous support for LangChain agents
 aiohttp>=3.9.0
+
+streamlit>=1.48,<2.0

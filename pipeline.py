@@ -53,7 +53,7 @@ def run_step(step_name, operation, *args, **kwargs):
     return result
 
 #creating base function
-def run_reasearch_pipeline(topic: str) -> dict:
+def run_research_pipeline(topic: str) -> dict:
     state = {}
     callbacks = [PipelineDebugHandler()]
 
